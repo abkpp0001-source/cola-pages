@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+<title>小径分岔的花园 · The Garden of Forking Paths · v0.3</title>
+<style>
+  :root { color-scheme: light; --ink:#354743; --muted:#647674; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; width:100%; min-height:100%; overflow:hidden; }
+  body { background:#e7ecdf; color:var(--ink); font-family:"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  body.walking canvas { cursor:none; }
+  .veil { position:fixed; inset:0; pointer-events:none; box-shadow:inset 0 0 120px rgba(69,85,74,.15); }
+  .top { position:fixed; z-index:2; top:clamp(16px,3vh,30px); left:clamp(18px,4vw,56px); right:clamp(18px,4vw,56px); display:flex; align-items:flex-start; justify-content:space-between; gap:14px; pointer-events:none; }
+  .eyebrow { font-size:10px; letter-spacing:.3em; color:#738684; font-weight:700; margin:0 0 7px; }
+  h1 { font-family:"Songti SC","STSong","SimSun",serif; font-weight:500; font-size:clamp(22px,3vw,38px); letter-spacing:.12em; margin:0; text-shadow:0 1px 16px #faf9ee; }
+  .subtitle { font-size:11px; letter-spacing:.13em; color:#657573; margin:7px 0 0; }
+  .signature { font-family:'Caveat','Segoe Script',cursive; font-size:22px; color:#7d8f89; margin:2px 0 0; transform:rotate(-2.5deg); transform-origin:left center; display:inline-block; }
+  .pills { display:flex; flex-direction:column; align-items:flex-end; gap:7px; }
+  .pill { pointer-events:auto; cursor:pointer; border:1px solid rgba(95,122,111,.32); background:rgba(250,249,239,.8); color:#4d6661; border-radius:100px; padding:8px 13px; font:inherit; font-size:11px; white-space:nowrap; backdrop-filter:blur(12px); transition:background .18s,transform .18s; }
+  .pill:hover { background:#fffef5; transform:translateY(-2px); }
+  .pill:focus-visible, .season:focus-visible { outline:2px solid #587d7b; outline-offset:3px; }
+  .dock { position:fixed; z-index:2; bottom:max(14px,env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); width:min(680px,calc(100% - 26px)); padding:15px 18px 13px; border:1px solid rgba(255,255,255,.85); border-radius:20px; background:rgba(250,249,241,.87); box-shadow:0 14px 48px rgba(79,101,89,.15),inset 0 1px 0 white; backdrop-filter:blur(18px); text-align:center; transition:width .35s,padding .35s,opacity .35s; }
+  .dock.mini { width:min(430px,calc(100% - 26px)); padding:9px 16px 7px; opacity:.82; }
+  .dock.mini .hint, .dock.mini .choices, .dock.mini .status .en { display:none; }
+  .dock.mini .status { font-size:11px; letter-spacing:.08em; }
+  .dock.mini .progress { margin:6px 2px 0; }
+  .status { margin:0; font-size:12px; letter-spacing:.13em; color:#415c57; font-weight:700; }
+  .status .en { display:block; font-family:'Caveat','Segoe Script',cursive; font-size:17px; font-weight:600; letter-spacing:.06em; color:#7d8f89; margin-top:1px; }
+  .hint { margin:5px 0 11px; color:#75837c; font-size:11px; line-height:1.55; white-space:pre-line; }
+  .choices { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .season { min-width:0; border:1px solid rgba(96,115,104,.12); background:#f7f8ef; color:#41574f; border-radius:13px; padding:9px 5px; cursor:pointer; font:inherit; display:flex; align-items:center; justify-content:center; gap:7px; transition:transform .18s,box-shadow .18s,opacity .18s; }
+  .season:hover:not(:disabled) { transform:translateY(-3px); box-shadow:0 7px 16px rgba(69,89,75,.1); }
+  .season:disabled { cursor:default; opacity:.34; }
+  .season.selected:disabled { opacity:1; box-shadow:inset 0 0 0 1px rgba(72,92,80,.28); }
+  .season .glyph { line-height:1; display:flex; align-items:center; }
+  .season .glyph svg { display:block; }
+  .season strong { font-family:'Caveat','Segoe Script',cursive; font-weight:600; font-size:19px; letter-spacing:.04em; }
+  .season[data-season="spring"] { background:#f7ecee; } .season[data-season="summer"] { background:#e5f1eb; }
+  .season[data-season="autumn"] { background:#f7eedc; } .season[data-season="winter"] { background:#e8eff4; }
+  .progress { height:2px; background:#dadfd4; border-radius:3px; overflow:hidden; margin:11px 2px 0; }
+  .progress span { display:block; width:0; height:100%; background:#648980; transition:width .1s linear; }
+  @media (max-width:660px) {
+    .top { top:16px; left:18px; right:16px; }
+    .eyebrow { font-size:9px; letter-spacing:.18em; }
+    .subtitle { display:none; }
+    .pill { font-size:10px; padding:7px 10px; }
+    .dock { padding:12px 12px 10px; }
+    .choices { grid-template-columns:repeat(2,1fr); gap:7px; }
+    .hint { margin-bottom:9px; }
+  }
+  @media (max-height:600px) and (min-width:661px) { .dock { padding:10px 16px; } .hint { margin-bottom:6px; } }
+</style>
+</head>
+<body>
+<canvas id="garden" aria-label="花园：上下两个路口，四条四季小径从左到右排列"></canvas>
+<div class="veil"></div>
+<header class="top">
+  <div>
+    <p class="eyebrow">The Garden of Forking Paths</p>
+    <h1>小径分岔的花园</h1>
+    <p class="subtitle">时间迷宫 · 四季足迹 · 梦回声息</p>
+    <p class="signature">Rosie</p>
+  </div>
+  <div class="pills">
+    <button class="pill" id="zoom" type="button" aria-pressed="false">⤢ 视角：全景</button>
+    <button class="pill" id="sound" type="button" aria-pressed="false" title="浏览器合成的占位声景，并非真实鸟鸣或蝉鸣录音">♪ 声景：关闭</button>
+  </div>
+</header>
+<section class="dock" aria-label="旅程控制">
+  <p class="status" id="status" aria-live="polite">选择一条小径<span class="en">Choose a Path</span></p>
+  <p class="hint" id="hint">光标将化作足迹走进这场花园梦境，
+Your cursor becomes a trail of footprints and steps into the garden dream.
+你走到哪里，哪里便有了四季的声息。
+Move along it, and the garden awakens step by step.</p>
+  <div class="choices" id="choices">
+    <button class="season" data-season="spring" type="button"><span class="glyph"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="#dd8ba6"><circle cx="12" cy="5.6" r="3.3"/><circle cx="17.9" cy="9.9" r="3.3"/><circle cx="15.7" cy="16.6" r="3.3"/><circle cx="8.3" cy="16.6" r="3.3"/><circle cx="6.1" cy="9.9" r="3.3"/></g><circle cx="12" cy="11.8" r="3.1" fill="#e9bb62"/></svg></span><strong>Spring</strong></button>
+    <button class="season" data-season="summer" type="button"><span class="glyph"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15.8 12 L22.6 7.2 Q21 12 22.6 16.8 Z" fill="#c9713f"/><ellipse cx="9.8" cy="12" rx="7.2" ry="4.7" fill="#e08a55"/><path d="M4.6 9.2 Q7.4 12 4.6 14.8" stroke="#c9713f" stroke-width="1.3" fill="none" stroke-linecap="round"/><circle cx="6.6" cy="10.7" r="1.05" fill="#43372f"/></svg></span><strong>Summer</strong></button>
+    <button class="season" data-season="autumn" type="button"><span class="glyph"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#c8813f" d="M12 2.4c1.6 1.8 2.5 3.9 2 6 1.3.1 2.8-.4 4.3-1.7 0 2.3-1.3 4.1-3.7 5.1 1.2.8 2.6 1.2 4.6 1-2.2 2.4-5.2 3-8 1.8.5 1.6.7 3.5.7 6h-1.8c0-2.5.2-4.4.7-6-2.8 1.2-5.8.6-8-1.8 2 .2 3.4-.2 4.6-1-2.4-1-3.7-2.8-3.7-5.1 1.5 1.3 3 1.8 4.3 1.7-.5-2.1.4-4.2 2-6z"/></svg></span><strong>Autumn</strong></button>
+    <button class="season" data-season="winter" type="button"><span class="glyph"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" stroke="#7ba2b8" stroke-width="1.6" stroke-linecap="round" fill="none"><defs><path id="snow-arm" d="M12 12 L12 3 M12 6.5 L9.7 4.2 M12 6.5 L14.3 4.2 M12 9 L10.4 7.4 M12 9 L13.6 7.4"/></defs><use href="#snow-arm"/><use href="#snow-arm" transform="rotate(60 12 12)"/><use href="#snow-arm" transform="rotate(120 12 12)"/><use href="#snow-arm" transform="rotate(180 12 12)"/><use href="#snow-arm" transform="rotate(240 12 12)"/><use href="#snow-arm" transform="rotate(300 12 12)"/></svg></span><strong>Winter</strong></button>
+  </div>
+  <div class="progress" aria-label="当前路程"><span id="progress"></span></div>
+</section>
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('garden');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('status');
+  const hintEl = document.getElementById('hint');
+  const soundButton = document.getElementById('sound');
+  const zoomButton = document.getElementById('zoom');
+  const progressEl = document.getElementById('progress');
+  const buttons = [...document.querySelectorAll('.season')];
+  const dockEl = document.querySelector('.dock');
+
+  // 世界坐标：1000 x 880。上端路口在上，下端路口在下，四条小径从左到右排成四道。
+  const W = 1000, H = 1240;
+  const TOP = { x: 500, y: 112 }, BOT = { x: 500, y: 1128 };
+  const PLAZA_RX = 306;
+  const LANES = [236, 412, 588, 764];
+  const BAND_COUNT = 34;
+  const MAX_TT_STEP = 0.006;     // 每帧脚印最多前进的路径比例：再快扫鼠标，也要慢慢走完
+  const STEP_DIST = 26;          // 沿路径向前走的距离，够了才落一个脚印
+
+  const SEASONS = [
+    { name: '春', en: 'Spring', key: 'spring', rim: '#b891a1', core: '#f8ecdd', wash: '#e2b4c4', width: 42, sway: -52 },
+    { name: '夏', en: 'Summer', key: 'summer', rim: '#5f9d9c', core: '#f5ecd0', wash: '#84c8bb', width: 44, sway: 38 },
+    { name: '秋', en: 'Autumn', key: 'autumn', rim: '#bd976b', core: '#f6e8ce', wash: '#d3ae76', width: 44, sway: -34 },
+    { name: '冬', en: 'Winter', key: 'winter', rim: '#8fadb9', core: '#eef2ee', wash: '#a6c7d4', width: 42, sway: 46 }
+  ];
+
+  const routes = SEASONS.map((s, i) => ({
+    name: s.name, en: s.en, key: s.key, rim: s.rim, core: s.core, wash: s.wash, width: s.width, lane: LANES[i],
+    p0: { x: TOP.x + (LANES[i] - TOP.x) * 0.86, y: TOP.y + 8 },
+    p3: { x: BOT.x + (LANES[i] - BOT.x) * 0.86, y: BOT.y - 8 },
+    c1: { x: LANES[i] + s.sway, y: TOP.y + 330 },
+    c2: { x: LANES[i] - s.sway * 1.35, y: BOT.y - 330 }
+  }));
+
+  // 每条小径的实际长度：落印由「向前走了多远」决定
+  routes.forEach((r) => {
+    let len = 0, prev = point(r, 0);
+    for (let i = 1; i <= 200; i++) { const p = point(r, i / 200); len += Math.hypot(p.x - prev.x, p.y - prev.y); prev = p; }
+    r.len = len;
+  });
+
+  const state = {
+    phase: 'junction',   // junction | walking
+    hub: 0,              // 0 = 上端，1 = 下端
+    route: null,
+    from: 0,             // 本程出发的上/下端
+    tt: 0,               // 0 → 1：从出发端到对端
+    journeys: 0,
+    bands: new Set()
+  };
+
+  // 脚印游标：位置由鼠标决定，横向吸附在小径上
+  const foot = { x: 0, y: 0, angle: 0, active: false };
+  let targetT = 0, targetSide = 0;   // 鼠标投影到路径上的 t 与横向偏移
+  let lastStamp = { x: 0, y: 0 }, lastStampT = 0;
+  let prevFoot = { x: 0, y: 0 };
+  let smoothSpeed = 0;
+  let side = 1;
+
+  const footprints = [];
+  const responses = [];
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const persp = (y) => 0.88 + (y / H) * 0.30;   // 越靠下越近，越大
+
+  function point(r, t) {
+    const u = 1 - t;
+    return {
+      x: u*u*u*r.p0.x + 3*u*u*t*r.c1.x + 3*u*t*t*r.c2.x + t*t*t*r.p3.x,
+      y: u*u*u*r.p0.y + 3*u*u*t*r.c1.y + 3*u*t*t*r.c2.y + t*t*t*r.p3.y
+    };
+  }
+  function tangent(r, t) {
+    const a = point(r, Math.max(0, t - 0.004));
+    const b = point(r, Math.min(1, t + 0.004));
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len, y: dy / len, nx: -dy / len, ny: dx / len, angle: Math.atan2(dy, dx) };
+  }
+  function tracePath(r) {
+    ctx.beginPath();
+    ctx.moveTo(r.p0.x, r.p0.y);
+    ctx.bezierCurveTo(r.c1.x, r.c1.y, r.c2.x, r.c2.y, r.p3.x, r.p3.y);
+  }
+  function seeded(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+
+  // ── 相机：全景（拟合整张图）与近景（跟随脚印）之间平滑过渡 ──────────────
+  const fit = { scale: 1, cx: 0, cy: 0 };
+  const cam = { scale: 1, x: W / 2, y: H / 2 };
+  let zoom = 0, zoomTarget = 0;
+  const NEAR_SCALE = 3.8;        // 近景的绝对缩放：推近后视野更窄、更贴近脚印
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(innerWidth * dpr);
+    canvas.height = Math.round(innerHeight * dpr);
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const narrow = innerWidth < 680;
+    const topPad = narrow ? 116 : 96;
+    // 底部留白跟着选择板的实际高度走：梦回的标签永远不会被它压住
+    const dockH = dockEl ? dockEl.getBoundingClientRect().height : 200;
+    const bottomPad = Math.max(narrow ? 200 : 190, dockH + 44);
+    const availH = Math.max(170, innerHeight - topPad - bottomPad);
+    const availW = innerWidth - 22;
+    fit.scale = Math.min(availW / W, availH / H);
+    fit.cx = innerWidth / 2;
+    fit.cy = topPad + availH / 2;
+  }
+  function screenToWorld(sx, sy) {
+    return { x: (sx - fit.cx) / cam.scale + cam.x, y: (sy - fit.cy) / cam.scale + cam.y };
+  }
+  function focusPoint() {
+    if (state.phase === 'walking') return { x: foot.x, y: foot.y, bias: 60 };
+    const h = state.hub === 0 ? TOP : BOT;
+    return { x: h.x, y: h.y, bias: 0 };
+  }
+  function updateCamera(dt) {
+    zoom += (zoomTarget - zoom) * Math.min(1, dt * 0.011);
+    cam.scale = fit.scale + zoom * Math.max(0.4, NEAR_SCALE - fit.scale);
+    let tx = W / 2, ty = H / 2;
+    if (zoom > 0.015) {
+      const f = Math.min(1, zoom * 1.4), a = focusPoint();
+      tx = W / 2 + (a.x - W / 2) * f;
+      ty = H / 2 + (a.y - H / 2) * f - a.bias * f;
+    }
+    const k = Math.min(1, dt * 0.010);
+    cam.x += (tx - cam.x) * k;
+    cam.y += (ty - cam.y) * k;
+  }
+
+  // ── 底图：一次性绘制，之后的四季物件与脚印都画在上面 ────────────────────
+  let backdrop = null;
+  function ellipseOn(g, x, y, rx, ry, color, alpha = 1, rotation = 0) {
+    g.save(); g.translate(x, y); g.rotate(rotation); g.globalAlpha = alpha; g.fillStyle = color;
+    g.beginPath(); g.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); g.fill(); g.restore();
+  }
+  function paintBackdrop() {
+    backdrop = document.createElement('canvas');
+    backdrop.width = W; backdrop.height = H;
+    const g = backdrop.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, W * .3, H);
+    grad.addColorStop(0, '#dde7d9'); grad.addColorStop(.42, '#eeeada');
+    grad.addColorStop(.75, '#e2e6d2'); grad.addColorStop(1, '#d3e0d8');
+    g.fillStyle = grad; g.fillRect(0, 0, W, H);
+
+    const rng = seeded(92417);
+
+    // 1) 大块朦胧色斑：整片画布像未干的花园，而不是一条走廊
+    const washes = [['#b8cfb2', .16], ['#e6d9ba', .14], ['#bcd0d6', .12], ['#ddc2cb', .1], ['#c8d6b8', .15]];
+    washes.forEach(([color, a]) => {
+      for (let i = 0; i < 24; i++) {
+        g.globalAlpha = a * (.55 + rng() * .9);
+        g.fillStyle = color;
+        g.beginPath();
+        g.ellipse(rng() * W, rng() * H, 70 + rng() * 170, 46 + rng() * 110, rng() * 3, 0, Math.PI * 2);
+        g.fill();
+      }
+    });
+
+    // 2) 灌木与花圃：让小径之间留出自己的呼吸
+    const shrubs = ['#8aa886', '#a2b899', '#72927b', '#b5c3a3'];
+    for (let i = 0; i < 110; i++) {
+      const x = 30 + rng() * (W - 60), y = 46 + rng() * (H - 92), r = 12 + rng() * 34;
+      g.globalAlpha = .1 + rng() * .16;
+      g.fillStyle = shrubs[Math.floor(rng() * shrubs.length)];
+      for (let k = 0; k < 3; k++) {
+        g.beginPath();
+        g.ellipse(x + (rng() - .5) * r, y + (rng() - .5) * r * .55,
+          r * (.5 + rng() * .6), r * (.3 + rng() * .4), 0, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+
+    // 3) 贴着路缘的碎色笔触 + 花点（不进路心，避免四条道糊成一整块）
+    const petals = ['#e9a7b7', '#d8b3d6', '#f0c780', '#f5efdc', '#cf7f92'];
+    routes.forEach((r) => {
+      for (let j = 0; j < 260; j++) {
+        const t = 0.02 + rng() * 0.96, p = point(r, t), tg = tangent(r, t), sd = rng() < .5 ? -1 : 1;
+        const d = (r.width / 2 + 8) + rng() * 58;
+        const x = p.x + tg.nx * d * sd + (rng() - .5) * 22;
+        const y = p.y + tg.ny * d * sd + (rng() - .5) * 22;
+        g.save(); g.translate(x, y); g.rotate((rng() - .5) * 1.9);
+        g.globalAlpha = .07 + rng() * .17;
+        g.fillStyle = [r.wash, '#f6f5d8', '#6f9076'][Math.floor(rng() * 3)];
+        g.beginPath(); g.ellipse(0, 0, 5 + rng() * 24, 2 + rng() * 11, 0, 0, Math.PI * 2); g.fill();
+        g.restore();
+      }
+      // 成丛的花点：远看是碎色，近看是花园
+      for (let j = 0; j < 90; j++) {
+        const t = 0.02 + rng() * 0.96, p = point(r, t), tg = tangent(r, t), sd = rng() < .5 ? -1 : 1;
+        const d = (r.width / 2 + 10) + rng() * 64;
+        const cx = p.x + tg.nx * d * sd, cy = p.y + tg.ny * d * sd;
+        for (let k = 0; k < 5; k++) {
+          g.globalAlpha = .22 + rng() * .3;
+          g.fillStyle = r.key === 'winter' ? '#eefaff' : petals[Math.floor(rng() * petals.length)];
+          g.beginPath();
+          g.arc(cx + (rng() - .5) * 26, cy + (rng() - .5) * 26, 2.2 + rng() * 4.6, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+    });
+
+    // 4) 夏天：小径两侧的浅水花渠（金鱼只能在水里）
+    const summer = routes[1], waterOff = summer.width / 2 + 31;
+    [-1, 1].forEach((sd) => {
+      g.beginPath();
+      for (let j = 0; j <= 100; j++) {
+        const t = .02 + .96 * j / 100, p = point(summer, t), tg = tangent(summer, t);
+        const x = p.x + tg.nx * sd * waterOff, y = p.y + tg.ny * sd * waterOff;
+        j ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.strokeStyle = 'rgba(101,173,174,.26)'; g.lineWidth = 52; g.lineCap = 'round'; g.stroke();
+      g.strokeStyle = 'rgba(178,226,216,.32)'; g.lineWidth = 28; g.stroke();
+    });
+
+    // 5) 细碎草絮与光点
+    for (let i = 0; i < 620; i++) {
+      const x = rng() * W, y = rng() * H;
+      g.fillStyle = i % 3 === 0 ? 'rgba(255,255,241,.16)' : 'rgba(72,107,89,.055)';
+      g.beginPath(); g.ellipse(x, y, .6 + rng() * 3, .4 + rng() * 1.8, rng() * 3, 0, Math.PI * 2); g.fill();
+    }
+    const haze = g.createRadialGradient(500, 330, 80, 500, 430, 900);
+    haze.addColorStop(0, 'rgba(255,252,238,.18)'); haze.addColorStop(1, 'rgba(255,252,238,0)');
+    g.fillStyle = haze; g.fillRect(0, 0, W, H);
+
+    g.globalCompositeOperation = 'destination-in';
+    const ex = g.createLinearGradient(0, 0, W, 0);
+    ex.addColorStop(0, 'transparent'); ex.addColorStop(.055, 'black');
+    ex.addColorStop(.945, 'black'); ex.addColorStop(1, 'transparent');
+    g.fillStyle = ex; g.fillRect(0, 0, W, H);
+    const ey = g.createLinearGradient(0, 0, 0, H);
+    ey.addColorStop(0, 'transparent'); ey.addColorStop(.06, 'black');
+    ey.addColorStop(.94, 'black'); ey.addColorStop(1, 'transparent');
+    g.fillStyle = ey; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'source-over';
+  }
+
+  // ── 脚印贴图：深浅差别靠压印深浅 + 暗面/亮面（凹陷感） ──────────────────
+  function buildFootSprite(dark, light) {
+    const s = document.createElement('canvas');
+    s.width = s.height = 128;
+    const g = s.getContext('2d');
+    g.translate(64, 64);
+    const shape = (dx, dy) => {
+      g.beginPath(); g.ellipse(dx, dy - 4, 5.4, 6.4, 0, 0, Math.PI * 2); g.fill();      // 前掌
+      g.beginPath(); g.ellipse(dx, dy + 8.5, 3.6, 4.4, 0, 0, Math.PI * 2); g.fill();     // 脚跟
+      [[-3.9, -12.2, 1.5, 1.9], [-1.3, -13.8, 1.4, 1.8],
+       [1.3, -13.4, 1.3, 1.7], [3.8, -11.4, 1.2, 1.6]].forEach(([tx, ty, rx, ry]) => {
+        g.beginPath(); g.ellipse(dx + tx, dy + ty, rx, ry, 0, 0, Math.PI * 2); g.fill();
+      });
+    };
+    g.globalAlpha = .5; g.fillStyle = light; shape(1.3, 1.6);
+    g.globalAlpha = 1;  g.fillStyle = dark;  shape(0, 0);
+    return s;
+  }
+  const SPRITE = {
+    normal: buildFootSprite('#4c4b3c', 'rgba(255,253,235,.95)'),
+    winter: buildFootSprite('#5c7d93', 'rgba(255,255,255,.98)')
+  };
+  function blitFoot(x, y, angle, k, alpha, winter) {
+    const s = winter ? SPRITE.winter : SPRITE.normal;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle + Math.PI / 2);   // 贴图脚尖朝上，转到行进方向
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(s, -64 * k, -64 * k, 128 * k, 128 * k);
+    ctx.restore();
+  }
+
+  // ── 绘制 ──────────────────────────────────────────────────────────────
+  function drawRoads(time) {
+    routes.forEach((r, i) => {
+      const active = state.phase === 'walking' && state.route === i;
+      ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      // 路底的软阴影，让小径坐在地上而不是浮着
+      ctx.save();
+      ctx.globalAlpha = .2; ctx.strokeStyle = '#7b8e73';
+      ctx.lineWidth = r.width + 8; ctx.shadowColor = 'rgba(62,82,66,.5)';
+      ctx.shadowBlur = 26; ctx.shadowOffsetY = 9;
+      tracePath(r); ctx.stroke();
+      ctx.restore();
+      tracePath(r);
+      ctx.strokeStyle = r.wash; ctx.globalAlpha = active ? .3 : .16;
+      ctx.lineWidth = r.width + 18; ctx.shadowBlur = active ? 30 : 16; ctx.shadowColor = r.wash; ctx.stroke();
+      ctx.shadowBlur = 0; ctx.globalAlpha = .78;
+      tracePath(r); ctx.strokeStyle = r.rim; ctx.lineWidth = r.width + 7; ctx.stroke();
+      tracePath(r); ctx.strokeStyle = r.core; ctx.lineWidth = r.width; ctx.stroke();
+      // 路心的一点柔光，代替道路标线感
+      ctx.globalAlpha = .16; ctx.strokeStyle = '#fffdf0'; ctx.lineWidth = r.width * .52;
+      tracePath(r); ctx.stroke();
+      ctx.globalAlpha = .3; ctx.lineWidth = r.width * .22;
+      tracePath(r); ctx.stroke();
+      ctx.restore();
+      // 各季园牌：错落摆放，避免连成一条横线
+      const tk = [.41, .58, .36, .61][i], dir = [-1, 1, 1, -1][i];
+      const p = point(r, tk), tg = tangent(r, tk);
+      const bx = p.x + tg.nx * dir * 54, by = p.y + tg.ny * dir * 54;
+      ctx.save();
+      const fade = 1 - Math.min(1, zoom * 1.5) * .55;   // 推近时园牌让位给风景
+      ctx.globalAlpha = (active ? 1 : .82) * fade;
+      ctx.shadowColor = 'rgba(67,87,72,.16)'; ctx.shadowBlur = 10;
+      ellipseOn(ctx, bx, by, 44, 19, '#faf8ed', .95);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = ['#a46c86', '#488e86', '#a9773f', '#6793ab'][i];
+      ctx.font = '34px Caveat,"Segoe Script",cursive'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(r.en, bx, by + 1);
+      ctx.restore();
+    });
+  }
+
+  function drawPlazas(time) {
+    [{ h: TOP, zh: '入梦', en: 'Enter the Dream', ly: -46 }, { h: BOT, zh: '梦回', en: 'Back to the Dream', ly: 66 }]
+      .forEach(({ h, zh, en, ly }, i) => {
+      const here = state.hub === i && state.phase === 'junction';
+      const pulse = here ? 2.5 * Math.sin(time * .0024) : 0;
+      const x0 = h.x - PLAZA_RX + 30, x1 = h.x + PLAZA_RX - 30;
+      ctx.save(); ctx.lineCap = 'round';
+      // 横向的园路：四条小径在它身上交汇
+      const band = (width, color, alpha) => {
+        ctx.beginPath(); ctx.moveTo(x0, h.y);
+        ctx.quadraticCurveTo(h.x, h.y + (i ? 6 : -6), x1, h.y);
+        ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width; ctx.stroke();
+      };
+      band(70, '#d8d3b2', .28);
+      band(52, '#eeeacd', .8);
+      band(40, '#faf7e4', .95);
+      ctx.beginPath(); ctx.moveTo(x0, h.y);
+      ctx.quadraticCurveTo(h.x, h.y + (i ? 6 : -6), x1, h.y);
+      ctx.strokeStyle = 'rgba(255,255,247,.55)'; ctx.globalAlpha = 1;
+      ctx.lineWidth = 1.6; ctx.setLineDash([3, 12]); ctx.stroke(); ctx.setLineDash([]);
+      // 站在这里的那一点
+      ellipseOn(ctx, h.x, h.y, 15 + pulse, 11 + pulse, here ? '#6f9a8a' : '#b2b8a1', .9);
+      ellipseOn(ctx, h.x, h.y, here ? 6 + pulse * .5 : 4, here ? 6 + pulse * .5 : 4, '#fbf9e9', .8);
+      ctx.restore();
+      ctx.save();
+      // 中文用手写楷体，英文换回宋体：两段分别绘制，拼成一行居中
+      const zhFont = `${Math.round(22 / cam.scale)}px "Ma Shan Zheng",serif`;
+      const enFont = `${Math.round(18 / cam.scale)}px Caveat,"Segoe Script",cursive`;
+      ctx.textBaseline = 'middle';
+      ctx.font = zhFont; const wZh = ctx.measureText(zh).width;
+      ctx.font = enFont; const wEn = ctx.measureText(en).width;
+      const gap = 10 / cam.scale;
+      const labX = h.x - (wZh + gap + wEn) / 2;
+      ctx.globalAlpha = here ? .95 : .55;
+      ctx.fillStyle = '#5b716c';
+      ctx.font = zhFont; ctx.textAlign = 'left';
+      ctx.fillText(zh, labX, h.y + ly);
+      ctx.font = enFont;
+      ctx.fillText(en, labX + wZh + gap, h.y + ly);
+      ctx.restore();
+    });
+  }
+
+  function drawFlower(o, age, alpha, k) {
+    const bloom = clamp(age / 700, 0, 1), size = 3.4 * o.size * bloom * k;
+    ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.angle); ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#719b79'; ctx.lineWidth = 1.1 * k;
+    ctx.beginPath(); ctx.moveTo(0, 2 * size); ctx.lineTo(1 * k, 9 * k); ctx.stroke();
+    const colors = ['#ed9bb0', '#d4acd5', '#f6c274', '#f5f1df'];
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI * 2 / 6;
+      ellipseOn(ctx, Math.cos(a) * size * .85, Math.sin(a) * size * .85,
+        size * .56, size * .40, colors[o.color], .86, a);
+    }
+    ellipseOn(ctx, 0, 0, size * .38, size * .38, '#e9bb62');
+    ctx.restore();
+  }
+  function drawFish(o, age, alpha, k) {
+    const dart = clamp((age - 220) / 760, 0, 1), travel = dart * 22;
+    const x = o.x + o.nx * travel, y = o.y + o.ny * travel;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.atan2(o.ny, o.nx) + Math.sin(age * .015) * .3);
+    ctx.globalAlpha = alpha * .55;
+    ctx.strokeStyle = 'rgba(255,255,236,.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(-travel * .55, 0, 7 + travel * .4, 3, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = alpha;
+    ellipseOn(ctx, 0, 0, 7 * o.size * k, 3.4 * o.size * k, '#d98355');
+    ctx.fillStyle = '#ecad6a';
+    ctx.beginPath();
+    ctx.moveTo(-5 * k, 0); ctx.lineTo(-12 * k, -4.6 * k); ctx.lineTo(-11 * k, 4.6 * k); ctx.fill();
+    ellipseOn(ctx, 3 * k, -1 * k, .8 * k, .8 * k, '#473b37');
+    ctx.restore();
+  }
+  function drawLeaf(o, age, alpha, k) {
+    const drift = age * .003;
+    const x = o.x + Math.sin(age * .0016 + o.angle) * 10 + drift * 2;
+    const y = o.y + drift * 6;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(o.angle + age * .002);
+    ctx.globalAlpha = alpha;
+    ctx.scale(k, k);
+    ctx.fillStyle = ['#d69750', '#ae7049', '#e6b95d', '#b58d53'][o.color];
+    const s = o.size;
+    ctx.beginPath();
+    ctx.moveTo(0, -9 * s); ctx.quadraticCurveTo(5, -4, 6, -2); ctx.lineTo(4, 0);
+    ctx.lineTo(8, 3); ctx.quadraticCurveTo(2, 4, 0, 9 * s); ctx.quadraticCurveTo(-2, 4, -8, 3);
+    ctx.lineTo(-4, 0); ctx.lineTo(-6, -2); ctx.quadraticCurveTo(-5, -4, 0, -9 * s); ctx.fill();
+    ctx.strokeStyle = 'rgba(108,84,52,.6)'; ctx.lineWidth = .8;
+    ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(0, 11); ctx.stroke();
+    ctx.restore();
+  }
+  function drawSnow(o, age, alpha, k) {
+    const x = o.x + Math.sin(age * .0014 + o.angle) * 8;
+    const y = o.y + age * .003;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(age * .00035 + o.angle);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = o.color % 2 ? '#f9ffff' : '#8fbed4';
+    ctx.lineWidth = 1.2 * k; ctx.lineCap = 'round';
+    const size = 5 * o.size * k;
+    for (let i = 0; i < 3; i++) {
+      ctx.rotate(Math.PI / 3);
+      ctx.beginPath(); ctx.moveTo(-size, 0); ctx.lineTo(size, 0); ctx.stroke();
+    }
+    ellipseOn(ctx, 0, 0, 1.3 * k, 1.3 * k, '#eafcff');
+    ctx.restore();
+  }
+  function drawResponses(now) {
+    for (let i = responses.length - 1; i >= 0; i--) {
+      const o = responses[i], age = now - o.born;
+      if (age > o.life) { responses.splice(i, 1); continue; }
+      const alpha = Math.min(1, age / 420, (o.life - age) / 1000) * .94;
+      const k = persp(o.y);
+      if (o.key === 'spring') drawFlower(o, age, alpha, k);
+      else if (o.key === 'summer') drawFish(o, age, alpha, k);
+      else if (o.key === 'autumn') drawLeaf(o, age, alpha, k);
+      else drawSnow(o, age, alpha, k);
+    }
+  }
+  function drawFootprints(now) {
+    for (let i = footprints.length - 1; i >= 0; i--) {
+      const o = footprints[i], age = now - o.born;
+      if (age > o.life) { footprints.splice(i, 1); continue; }
+      const fade = 1 - age / o.life;
+      const env = Math.min(1, age / 90);                       // 落下瞬间的浮现
+      const alpha = (.22 + o.depth * .66) * fade * env;
+      if (alpha < .012) continue;
+      const k = o.persp * (.66 + o.depth * .55);
+      blitFoot(o.x, o.y, o.angle, k, alpha, o.key === 'winter');
+    }
+  }
+  function drawCursorFoot(now) {
+    if (!foot.active || state.phase !== 'walking') return;
+    const r = routes[state.route];
+    // 地面上的一点柔光，提示「脚印就在光标处」
+    const glow = ctx.createRadialGradient(foot.x, foot.y, 0, foot.x, foot.y, 34);
+    glow.addColorStop(0, 'rgba(255,252,232,.42)');
+    glow.addColorStop(1, 'rgba(255,252,232,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(foot.x, foot.y, 34, 0, Math.PI * 2); ctx.fill();
+    const k = persp(foot.y) * .8;
+    blitFoot(foot.x, foot.y, foot.angle, k * 1.1, .2, r.key === 'winter');   // 浅影
+    blitFoot(foot.x - 1, foot.y - 2, foot.angle, k, .95, r.key === 'winter');
+  }
+
+  // ── 这一程的逻辑 ───────────────────────────────────────────────────────
+  function spawnBand() {
+    const r = routes[state.route];
+    const band = clamp(Math.floor(state.tt * BAND_COUNT), 0, BAND_COUNT - 1);
+    if (state.bands.has(band)) return;
+    state.bands.add(band);
+    const t0 = band / BAND_COUNT, t1 = (band + 1) / BAND_COUNT;
+    for (let k = 0; k < 3; k++) {
+      const tt = t0 + Math.random() * (t1 - t0);
+      const realT = state.from === 0 ? tt : 1 - tt;
+      const p = point(r, realT), tg = tangent(r, realT);
+      const sd = k % 2 === 0 ? -1 : 1;
+      const d = r.key === 'summer' ? rand(44, 66) : rand(40, 76);
+      responses.push({
+        key: r.key,
+        x: p.x + tg.nx * sd * d + rand(-7, 7),
+        y: p.y + tg.ny * sd * d + rand(-7, 7),
+        nx: tg.nx * sd, ny: tg.ny * sd,
+        born: performance.now(),
+        life: r.key === 'summer' ? 4200 : rand(6200, 10500),
+        size: rand(.72, 1.26),
+        angle: rand(-1, 1),
+        color: Math.floor(rand(0, 4))
+      });
+    }
+    if (responses.length > 280) responses.splice(0, responses.length - 280);
+  }
+
+  function stamp(now) {
+    const r = routes[state.route];
+    const realT = state.from === 0 ? state.tt : 1 - state.tt;
+    const tg = tangent(r, realT);
+    side *= -1;
+    const depth = clamp(1.1 - smoothSpeed / 520, 0.22, 1) * rand(0.8, 1.12);
+    footprints.push({
+      x: foot.x + tg.nx * side * 6, y: foot.y + tg.ny * side * 6,
+      angle: foot.angle, depth: clamp(depth, .2, 1),
+      born: now, life: r.key === 'winter' ? 22000 : 14000,
+      key: r.key, persp: persp(foot.y)
+    });
+    if (footprints.length > 150) footprints.shift();
+    if (soundOn && r.key === 'winter') snowCrunch();
+  }
+
+  function beginJourney(i) {
+    if (state.phase !== 'walking' && state.phase !== 'junction') return;
+    state.phase = 'walking';
+    state.route = i;
+    state.from = state.hub;
+    state.tt = 0; targetT = 0; targetSide = 0;
+    mouseLive = false; lastStampT = 0;
+    state.bands = new Set();
+    footprints.length = 0; responses.length = 0;
+    const r = routes[i];
+    foot.x = r.p0.x; foot.y = r.p0.y; foot.active = true;
+    foot.angle = state.from === 0 ? Math.PI / 2 : -Math.PI / 2;
+    lastStamp = { x: foot.x, y: foot.y };
+    prevFoot = { x: foot.x, y: foot.y };
+    smoothSpeed = 0;
+    spawnBand();
+    document.body.classList.add('walking');
+    updateUI();
+  }
+
+  function arrive() {
+    state.hub = 1 - state.hub;
+    state.phase = 'junction';
+    state.route = null;
+    state.journeys++;
+    foot.active = false;
+    targetT = 0; targetSide = 0;
+    zoomTarget = 0; updateZoomUI();
+    document.body.classList.remove('walking');
+    updateUI();
+  }
+
+  // 鼠标 → 路径上的位置（横向吸附到小径，可小幅左右游走）
+  let hasPointer = false, lastMouse = null, mouseLive = false;
+  function aimFoot(sx, sy) {
+    if (state.phase !== 'walking') return;
+    hasPointer = true;
+    if (lastMouse) {
+      // 纵向为主（含小幅斜向）才迈步；纯粹左右滑动鼠标不前进
+      const dx = sx - lastMouse.x, dy = sy - lastMouse.y;
+      if (dx * dx + dy * dy > 4 && Math.abs(dy) >= Math.abs(dx) * 0.6) mouseLive = true;
+    }
+    lastMouse = { x: sx, y: sy };
+    const w = screenToWorld(sx, sy);
+    const r = routes[state.route];
+    let bestT = 0, bestD = Infinity;
+    for (let i = 0; i <= 140; i++) {
+      const t = i / 140, p = point(r, t);
+      const d = (p.x - w.x) ** 2 + (p.y - w.y) ** 2;
+      if (d < bestD) { bestD = d; bestT = t; }
+    }
+    // 局部细化，让脚印落点更贴手
+    let lo = Math.max(0, bestT - 0.012), hi = Math.min(1, bestT + 0.012);
+    for (let k = 0; k < 12; k++) {
+      const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3;
+      const p1 = point(r, m1), p2 = point(r, m2);
+      const d1 = (p1.x - w.x) ** 2 + (p1.y - w.y) ** 2;
+      const d2 = (p2.x - w.x) ** 2 + (p2.y - w.y) ** 2;
+      if (d1 < d2) hi = m2; else lo = m1;
+    }
+    const realT = (lo + hi) / 2;
+    const p = point(r, realT), tg = tangent(r, realT);
+    targetT = state.from === 0 ? realT : 1 - realT;
+    targetSide = clamp((w.x - p.x) * tg.nx + (w.y - p.y) * tg.ny, -(r.width / 2 - 13), r.width / 2 - 13);
+  }
+
+  function stepJourney(now, dt) {
+    if (state.phase !== 'walking') return;
+    const goal = clamp(targetT, 0, 1);
+    // 只有鼠标真的在动时脚印才前进：停住鼠标 = 停下脚步，闲庭漫步
+    if (mouseLive) {
+      state.tt += clamp((goal - state.tt) * Math.min(1, dt * 0.008), -MAX_TT_STEP, MAX_TT_STEP);
+      state.tt = clamp(state.tt, 0, 1);
+      mouseLive = false;
+    }
+
+    const r = routes[state.route];
+    const realT = state.from === 0 ? state.tt : 1 - state.tt;
+    const p = point(r, realT), tg = tangent(r, realT);
+    const off = clamp(targetSide, -(r.width / 2 - 13), r.width / 2 - 13);
+    const nx = p.x + tg.nx * off, ny = p.y + tg.ny * off;
+
+    const move = Math.hypot(nx - prevFoot.x, ny - prevFoot.y);
+    // 用「世界单位/秒」衡量脚步快慢：慢慢走压得深，快扫过去只留浅印
+    const spd = (move / Math.max(dt, 1)) * 1000;
+    smoothSpeed = smoothSpeed * 0.86 + spd * 0.14;
+    foot.x = nx; foot.y = ny;
+    foot.angle = tg.angle + (state.from === 1 ? Math.PI : 0);
+    prevFoot = { x: nx, y: ny };
+
+    // 走的距离够了才落一个脚印：疏密由 STEP_DIST 控制
+    // 向前走了足够距离才落印：原地左右挪鼠标不会踩出脚印
+    if (Math.abs(state.tt - lastStampT) * r.len >= STEP_DIST) {
+      stamp(now);
+      lastStamp = { x: foot.x, y: foot.y };
+      lastStampT = state.tt;
+    }
+    spawnBand();
+    progressEl.style.width = Math.round(state.tt * 100) + '%';
+    if (state.tt >= 0.965) arrive();
+  }
+
+  // ── 渲染循环 ───────────────────────────────────────────────────────────
+  function render(now, dt) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    ctx.fillStyle = '#e5eadd';
+    ctx.fillRect(0, 0, innerWidth, innerHeight);
+
+    updateCamera(dt);
+    ctx.save();
+    ctx.translate(fit.cx, fit.cy);
+    ctx.scale(cam.scale, cam.scale);
+    ctx.translate(-cam.x, -cam.y);
+    ctx.drawImage(backdrop, 0, 0);
+    drawRoads(now);
+    drawResponses(now);
+    drawFootprints(now);
+    drawCursorFoot(now);
+    drawPlazas(now);
+    ctx.restore();
+    updateAudio(now);
+  }
+
+  function frame(now) {
+    const dt = Math.min(52, now - lastFrame);
+    lastFrame = now;
+    stepJourney(now, dt);
+    render(now, dt);
+    requestAnimationFrame(frame);
+  }
+  let lastFrame = performance.now();
+
+  // ── 界面与输入 ─────────────────────────────────────────────────────────
+  function updateUI() {
+    const walking = state.phase === 'walking';
+    statusEl.innerHTML = walking
+      ? `正在 ${routes[state.route].en} 小径上漫步`
+      : '选择一条小径<span class="en">Choose a Path</span>';
+    hintEl.textContent = walking
+      ? '移动鼠标，脚印跟着你走；停住鼠标就是停下脚步。滚轮向上拉近，向下回到全景。\nMove your mouse and the footprints follow — hold still and the garden waits with you. Scroll up to step closer, scroll down for the whole garden.'
+      : '光标将化作足迹走进这场花园梦境，\nYour cursor becomes a trail of footprints and steps into the garden dream.\n你走到哪里，哪里便有了四季的声息。\nMove along it, and the garden awakens step by step.';
+    buttons.forEach((b, i) => {
+      b.disabled = walking;
+      b.classList.toggle('selected', walking && state.route === i);
+    });
+    if (!walking) progressEl.style.width = '0%';
+    updateDockMini();
+  }
+
+  // 近景漫步时把控制板收成小条，还给画面一个沉浸的花园
+  function updateDockMini() {
+    const mini = state.phase === 'walking' && zoomTarget > 0.05;
+    if (dockEl.classList.contains('mini') !== mini) {
+      dockEl.classList.toggle('mini', mini);
+      setTimeout(resize, 420);   // 收起/展开后重新计算底部留白
+    }
+  }
+
+  buttons.forEach((b, i) => b.addEventListener('click', () => {
+    if (state.phase !== 'junction') return;
+    beginJourney(i);
+  }));
+
+  document.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse') {
+      // 触屏：需要在画布上按住拖动
+      if (e.buttons === 0) return;
+    }
+    aimFoot(e.clientX, e.clientY);
+  }, { passive: true });
+
+  // 滚轮：向上拉近并跟随脚印，向下退回全景
+  addEventListener('wheel', (e) => {
+    e.preventDefault();
+    zoomTarget = clamp(zoomTarget + (e.deltaY < 0 ? 0.34 : -0.34), 0, 1);
+    updateZoomUI();
+  }, { passive: false });
+
+  function updateZoomUI() {
+    const near = zoomTarget > 0.05;
+    zoomButton.textContent = near ? '⤢ 视角：近景' : '⤢ 视角：全景';
+    zoomButton.setAttribute('aria-pressed', String(near));
+    updateDockMini();
+  }
+  zoomButton.addEventListener('click', () => {
+    zoomTarget = zoomTarget > 0.05 ? 0 : 1;
+    updateZoomUI();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { zoomTarget = 0; updateZoomUI(); }
+  });
+
+  // ── 声景（浏览器合成的占位音，不是真实燕子/蝉/踩雪的录音） ─────────────
+  let audio = null, soundOn = false, lastChirp = 0;
+  function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { soundButton.textContent = '声景不可用'; soundButton.disabled = true; return false; }
+    const ac = new AC();
+    const master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
+    const filter = ac.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 700;
+    const noise = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+    const ch = noise.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    const source = ac.createBufferSource(); source.buffer = noise; source.loop = true;
+    const noiseGain = ac.createGain(); noiseGain.gain.value = .04;
+    source.connect(filter); filter.connect(noiseGain); noiseGain.connect(master); source.start();
+    const tone = ac.createOscillator(); tone.type = 'triangle'; tone.frequency.value = 150;
+    const toneGain = ac.createGain(); toneGain.gain.value = 0;
+    tone.connect(toneGain); toneGain.connect(master); tone.start();
+    audio = { ac, master, filter, noiseGain, tone, toneGain };
+    return true;
+  }
+  soundButton.addEventListener('click', async () => {
+    if (!audio && !initAudio()) return;
+    try { await audio.ac.resume(); soundOn = !soundOn; }
+    catch { soundButton.textContent = '声景不可用'; soundButton.disabled = true; return; }
+    soundButton.setAttribute('aria-pressed', String(soundOn));
+    soundButton.textContent = soundOn ? '♪ 声景：开启' : '♪ 声景：关闭';
+  });
+  function chirp() {
+    if (!audio) return;
+    const { ac, master } = audio, t = ac.currentTime;
+    const osc = ac.createOscillator(), gain = ac.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(850 + rand(0, 220), t);
+    osc.frequency.exponentialRampToValueAtTime(1350 + rand(0, 320), t + .085);
+    gain.gain.setValueAtTime(.0001, t);
+    gain.gain.exponentialRampToValueAtTime(.07, t + .02);
+    gain.gain.exponentialRampToValueAtTime(.0001, t + .19);
+    osc.connect(gain); gain.connect(master); osc.start(t); osc.stop(t + .2);
+  }
+  function snowCrunch() {
+    if (!audio || !soundOn) return;
+    const { ac, master } = audio, t = ac.currentTime;
+    const buf = ac.createBuffer(1, Math.round(ac.sampleRate * .1), ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ac.createBufferSource(), filter = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = buf; filter.type = 'lowpass'; filter.frequency.value = 850;
+    g.gain.setValueAtTime(.07, t); g.gain.exponentialRampToValueAtTime(.0001, t + .095);
+    src.connect(filter); filter.connect(g); g.connect(master); src.start(t);
+  }
+  function updateAudio(now) {
+    if (!audio) return;
+    const { ac, master, filter, noiseGain, tone, toneGain } = audio;
+    const key = state.phase === 'walking' ? routes[state.route].key : null;
+    const active = soundOn && key;
+    master.gain.setTargetAtTime(active ? .4 : 0, ac.currentTime, .16);
+    filter.frequency.setTargetAtTime(
+      key === 'summer' ? 1500 + Math.sin(now * .001) * 600 : key === 'autumn' ? 430 : 700, ac.currentTime, .25);
+    noiseGain.gain.setTargetAtTime(
+      key === 'autumn' ? .16 : key === 'summer' ? .11 : key === 'winter' ? .015 : .035, ac.currentTime, .3);
+    tone.frequency.setTargetAtTime(key === 'summer' ? 170 + Math.sin(now * .002) * 15 : 130, ac.currentTime, .2);
+    toneGain.gain.setTargetAtTime(key === 'summer' ? .065 * (.7 + .3 * Math.sin(now * .0017)) : 0, ac.currentTime, .3);
+    if (active && key === 'spring' && now - lastChirp > rand(1700, 2600)) { chirp(); lastChirp = now; }
+  }
+
+  window.gardenDebug = () => ({
+    phase: state.phase, hub: state.hub, route: state.route, tt: +state.tt.toFixed(3),
+    journeys: state.journeys, footprints: footprints.length, responses: responses.length,
+    zoom: +zoomTarget.toFixed(2), foot: { x: Math.round(foot.x), y: Math.round(foot.y) },
+    sample: footprints.slice(-6).map(o => ({ x: Math.round(o.x), y: Math.round(o.y), d: +o.depth.toFixed(2) }))
+  });
+
+  paintBackdrop();
+  resize();
+  updateUI();
+  updateZoomUI();
+  addEventListener('resize', resize);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
